@@ -1,0 +1,5 @@
+{
+  "name": "GEFOR - Sistema de Cadastro",
+  "description": "Sistema robusto de cadastro de dados para a Gerência de Formação (GEFOR) da SEDUC-PI, com área exclusiva para funcionários via Google Login.",
+  "requestFramePermissions": []
+}
