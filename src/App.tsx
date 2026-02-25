@@ -828,10 +828,12 @@ function DashboardPage() {
   const [adminUser, setAdminUser] = useState<any>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
-  const [activeTab, setActiveTab] = useState<'stats' | 'staff'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'staff' | 'settings'>('stats');
   const [staffList, setStaffList] = useState<any[]>([]);
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [newStaff, setNewStaff] = useState({ email: '', name: '', password: '', role: 'employee' });
+  const [appsScriptUrl, setAppsScriptUrl] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -842,7 +844,37 @@ function DashboardPage() {
     fetchUser();
     fetchDashboardData();
     fetchStaff();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      const data = await response.json();
+      setAppsScriptUrl(data.url);
+    } catch (error) {
+      console.error('Erro ao buscar configurações:', error);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: appsScriptUrl })
+      });
+      if (response.ok) {
+        alert('Configurações salvas com sucesso!');
+      }
+    } catch (error) {
+      alert('Erro ao salvar configurações.');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setIsLoadingStats(true);
@@ -947,6 +979,15 @@ function DashboardPage() {
                 )}
               >
                 GERENCIAR EQUIPE
+              </button>
+              <button 
+                onClick={() => setActiveTab('settings')}
+                className={cn(
+                  "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  activeTab === 'settings' ? "bg-white text-piaui-blue shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                CONFIGURAÇÕES
               </button>
             </div>
             <div className="h-8 w-px bg-slate-200 hidden md:block" />
@@ -1096,7 +1137,7 @@ function DashboardPage() {
               <p className="text-slate-400">Nenhum dado disponível para exibição.</p>
             </div>
           )
-        ) : (
+        ) : activeTab === 'staff' ? (
           <div className="space-y-8">
             <div className="flex flex-col md:flex-row gap-8">
               {/* Add Staff Form */}
@@ -1216,6 +1257,53 @@ function DashboardPage() {
               </motion.div>
             </div>
           </div>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-2xl mx-auto"
+          >
+            <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <Lock size={20} className="text-piaui-blue" />
+              Configurações do Sistema
+            </h3>
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Google Apps Script URL (Motor GEFOR)</label>
+                <div className="relative">
+                  <Send className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="url" 
+                    required
+                    style={{ paddingLeft: '44px' }}
+                    value={appsScriptUrl}
+                    onChange={e => setAppsScriptUrl(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-piaui-blue/20 outline-none transition-all"
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                  />
+                </div>
+                <p className="mt-2 text-[10px] text-slate-500 leading-relaxed">
+                  Este link é gerado quando você publica seu script no Google Apps Script como "App da Web". 
+                  Ele é responsável por salvar os dados na planilha e disparar os e-mails via Brevo.
+                </p>
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
+                <Info className="text-blue-600 shrink-0 mt-0.5" size={18} />
+                <p className="text-blue-800 text-[11px] leading-relaxed">
+                  <strong>Dica:</strong> Se você atualizar o código do script no Google, lembre-se de criar uma <strong>Nova Implantação</strong> para gerar um novo link ou atualizar a versão da implantação atual.
+                </p>
+              </div>
+
+              <button 
+                disabled={isSavingSettings}
+                className="w-full py-4 bg-piaui-blue text-white rounded-xl font-bold text-sm hover:bg-piaui-blue/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-piaui-blue/20"
+              >
+                {isSavingSettings ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle2 size={20} />}
+                SALVAR CONFIGURAÇÕES
+              </button>
+            </form>
+          </motion.div>
         )}
       </main>
     </div>

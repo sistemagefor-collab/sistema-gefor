@@ -44,6 +44,14 @@ db.exec(`
   )
 `);
 
+// Tabela de Configurações do Sistema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )
+`);
+
 // Migração manual: Adicionar coluna password se não existir (caso a tabela já existisse)
 try {
   db.prepare("ALTER TABLE staff ADD COLUMN password TEXT NOT NULL DEFAULT ''").run();
@@ -64,16 +72,20 @@ if (!existingAdmin) {
 }
 
 // Google Apps Script Configuration
-const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
+async function getAppsScriptUrl() {
+  const setting = db.prepare("SELECT value FROM settings WHERE key = 'GOOGLE_APPS_SCRIPT_URL'").get() as { value: string } | undefined;
+  return setting?.value || process.env.GOOGLE_APPS_SCRIPT_URL;
+}
 
 async function syncWithGoogle(data: any, action: "validate" | "register") {
   try {
-    if (!APPS_SCRIPT_URL) {
-      console.error("ERRO: URL do Google Apps Script não configurada no .env");
-      return { status: "error", message: "Erro de configuração no servidor." };
+    const url = await getAppsScriptUrl();
+    if (!url) {
+      console.error("ERRO: URL do Google Apps Script não configurada.");
+      return { status: "error", message: "A URL do Google Apps Script não foi configurada nas Configurações do Dashboard." };
     }
 
-    const response = await fetch(APPS_SCRIPT_URL, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...data, action })
@@ -84,7 +96,7 @@ async function syncWithGoogle(data: any, action: "validate" | "register") {
     return result;
   } catch (error) {
     console.error("Erro ao comunicar com Google Apps Script:", error);
-    return { status: "error", message: "Falha na comunicação com o banco de dados principal." };
+    return { status: "error", message: "Falha na comunicação com o banco de dados principal (Google Sheets)." };
   }
 }
 
@@ -185,6 +197,24 @@ async function startServer() {
     }
     const { id } = req.params;
     db.prepare("DELETE FROM staff WHERE id = ?").run(id);
+    res.json({ status: "success" });
+  });
+
+  // Settings Routes
+  app.get("/api/settings", (req, res) => {
+    if (!req.session?.user || req.session.user.role !== 'admin') {
+      return res.status(403).json({ status: "error", message: "Acesso negado." });
+    }
+    const url = db.prepare("SELECT value FROM settings WHERE key = 'GOOGLE_APPS_SCRIPT_URL'").get() as { value: string } | undefined;
+    res.json({ url: url?.value || "" });
+  });
+
+  app.post("/api/settings", (req, res) => {
+    if (!req.session?.user || req.session.user.role !== 'admin') {
+      return res.status(403).json({ status: "error", message: "Acesso negado." });
+    }
+    const { url } = req.body;
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('GOOGLE_APPS_SCRIPT_URL', ?)").run(url);
     res.json({ status: "success" });
   });
 
